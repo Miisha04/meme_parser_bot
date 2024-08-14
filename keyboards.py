@@ -21,13 +21,3 @@ main_kb = ReplyKeyboardMarkup(
     input_field_placeholder="choose action from menu",
     selective=True
 )
-
-links_kb = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Youtube", url="https://www.youtube.com"),
-            InlineKeyboardButton(text="Telegram", url="t.me://m1chae11"),
-        ]
-    ]
-
-)
