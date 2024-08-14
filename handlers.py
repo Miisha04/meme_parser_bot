@@ -3,6 +3,7 @@ import asyncio
 import websockets
 import time
 from aiogram import F, Router, types
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import Command, CommandStart
 from aiogram.utils.formatting import Text, Bold
 from aiogram.types import Message
@@ -12,7 +13,6 @@ from keyboards import main_kb
 from parser import get_data_from_pumpfun
 
 router = Router()
-
 
 
 @router.message(CommandStart())
@@ -76,6 +76,7 @@ async def get_latest_coin(message: Message):
 
 @router.message(F.text == 'check_tokens')
 async def check_tokens(message: Message):
+    good_tokens = {}
     await message.answer("WebSocket listener started.")
     url = "wss://rpc.api-pump.fun/ws"
     async with websockets.connect(url) as ws:
@@ -84,7 +85,50 @@ async def check_tokens(message: Message):
         }
         await ws.send(json.dumps(payload))
         async for trade in ws:
-            await message.answer(trade)
+            try:
+                data = json.loads(trade)
+                mint_address = data.get('Mint')
+                sol_amount = data.get('SolAmount') / 1000000000
+
+                if (sol_amount > 2.5) and (data.get('IsBuy')):
+
+                    if mint_address in good_tokens:
+                        good_tokens[mint_address] += sol_amount
+                    else:
+                        good_tokens[mint_address] = sol_amount
+
+                    copy_good_tokens = good_tokens
+
+                    for key, value in copy_good_tokens.items():
+                        if value > 10:
+                            token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
+                            token_data = json.loads(token_text)
+
+                            await message.answer(
+                                f"Solana value: {value}\n"
+                                f"Mint Address: <code>{key}</code>\n"
+                                f"MC: {token_data.get('usd_market_cap')} usd\n"
+                                f"Name_token: {token_data.get('name')}\n",
+                                parse_mode="HTML"
+                            )
+
+                        print(f"Key: {key}, Value: {value}")
+
+
+
+                    print("\n")
+                    # await message.answer(
+                    #     f"Solana Amount: {sol_amount}\n"
+                    #     f"Mint Address: <code>{mint_address}</code>\n"
+                    #     f"User Wallet: {data.get('User')}\n"
+                    #     f"MC: {token_data.get('usd_market_cap')} usd\n"
+                    #     f"Name_token: {token_data.get('name')}\n",
+                    #     parse_mode="HTML"
+                    #
+                    # )
+            except TelegramNetworkError as e:
+                print(f"Network error: {e}. Retrying...")
+                break
 
 
 @router.callback_query(lambda c: c.data == "stop_check")
