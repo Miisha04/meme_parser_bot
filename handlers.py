@@ -14,6 +14,8 @@ from parser import get_data_from_pumpfun
 
 router = Router()
 
+good_tokens = {}
+
 
 @router.message(CommandStart())
 async def get_start(message: Message):
@@ -74,61 +76,75 @@ async def get_latest_coin(message: Message):
         await message.answer("Failed to parse JSON data.")
 
 
-@router.message(F.text == 'check_tokens')
-async def check_tokens(message: Message):
-    good_tokens = {}
-    await message.answer("WebSocket listener started.")
+async def subscribe_trades(ws, message):
+
+    payload = {
+        "method": "subscribeTrades"
+    }
+    await ws.send(json.dumps(payload))
+    print("Subscribed to trades")
+
+
+async def unsubscribe_trades(ws, message):
+
+    payload = {
+        "method": "unsubscribeTrades"
+    }
+    await ws.send(json.dumps(payload))
+    print("Unsubscribed from trades")
+
+
+async def check_trades_logic(ws, message):
+    while True:
+        try:
+            trade = await ws.recv()
+            data = json.loads(trade)
+            mint_address = data.get('Mint')
+            sol_amount = data.get('SolAmount') / 1000000000
+
+            if (sol_amount > 0.4) and (data.get('IsBuy')):
+                if mint_address in good_tokens:
+                    good_tokens[mint_address] += sol_amount
+                else:
+                    good_tokens[mint_address] = sol_amount
+
+                del_key = ""
+
+                for key, value in good_tokens.items():
+                    if value > 15:
+                        token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
+                        token_data = json.loads(token_text)
+
+                        del_key = key
+
+                        await message.answer(
+                            f"Solana value: {value}\n"
+                            f"Mint Address: <code>{key}</code>\n"
+                            f"MC: {token_data.get('usd_market_cap')} usd\n"
+                            f"Name_token: {token_data.get('name')}\n",
+                            parse_mode="HTML"
+                        )
+
+                    print(f"Key: {key}, Value: {value}")
+
+                if del_key != "":
+                    del good_tokens[del_key]
+
+                print("\n")
+        except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK) as e:
+            print(f"Connection closed: {e}. Reconnecting...")
+            await asyncio.sleep(2)  # Подождите немного перед повторным подключением
+            continue  # Попробуйте снова подключиться
+
+
+@router.message(F.text.lower() == 'check_trades')
+async def check_trades(message: Message):
     url = "wss://rpc.api-pump.fun/ws"
     async with websockets.connect(url) as ws:
-        payload = {
-            "method": "subscribeTrades",
-        }
-        await ws.send(json.dumps(payload))
-        async for trade in ws:
-            try:
-                data = json.loads(trade)
-                mint_address = data.get('Mint')
-                sol_amount = data.get('SolAmount') / 1000000000
-
-                if (sol_amount > 2.5) and (data.get('IsBuy')):
-
-                    if mint_address in good_tokens:
-                        good_tokens[mint_address] += sol_amount
-                    else:
-                        good_tokens[mint_address] = sol_amount
-
-                    copy_good_tokens = good_tokens
-
-                    for key, value in copy_good_tokens.items():
-                        if value > 10:
-                            token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
-                            token_data = json.loads(token_text)
-
-                            await message.answer(
-                                f"Solana value: {value}\n"
-                                f"Mint Address: <code>{key}</code>\n"
-                                f"MC: {token_data.get('usd_market_cap')} usd\n"
-                                f"Name_token: {token_data.get('name')}\n",
-                                parse_mode="HTML"
-                            )
-
-                        print(f"Key: {key}, Value: {value}")
-
-
-
-                    print("\n")
-                    # await message.answer(
-                    #     f"Solana Amount: {sol_amount}\n"
-                    #     f"Mint Address: <code>{mint_address}</code>\n"
-                    #     f"User Wallet: {data.get('User')}\n"
-                    #     f"MC: {token_data.get('usd_market_cap')} usd\n"
-                    #     f"Name_token: {token_data.get('name')}\n",
-                    #     parse_mode="HTML"
-                    #
-                    # )
-            except TelegramNetworkError as e:
-                print(f"Network error: {e}. Retrying...")
-                break
+        await message.answer("WebSocket listener started.")
+        await subscribe_trades(ws, message)
+        await check_trades_logic(ws, message)
+        # await unsubscribe_trades(ws, message)
 
 
 @router.callback_query(lambda c: c.data == "stop_check")

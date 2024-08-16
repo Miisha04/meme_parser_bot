@@ -12,7 +12,7 @@ main_kb = ReplyKeyboardMarkup(
             KeyboardButton(text="get_latest_coin")
         ],
         [
-            KeyboardButton(text="check_tokens"),
+            KeyboardButton(text="check_trades"),
             KeyboardButton(text="/")
         ]
     ],
