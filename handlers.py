@@ -94,8 +94,28 @@ async def unsubscribe_trades(ws, message):
     print("Unsubscribed from trades")
 
 
+stop_event = asyncio.Event()
+
+
 async def check_trades_logic(ws, message):
+    stop_button = InlineKeyboardBuilder()
+    stop_button.add(types.InlineKeyboardButton(
+        text="Stop",
+        callback_data="stop_check")
+    )
+    await message.reply(
+        "Push the button to stop checking",
+        reply_markup=stop_button.as_markup()
+    )
+
+    stop_event.clear()
+
     while True:
+        if stop_event.is_set():
+            await unsubscribe_trades(ws, message)
+            await message.answer("Проверка остановлена")
+            break
+
         try:
             trade = await ws.recv()
             data = json.loads(trade)
@@ -144,10 +164,10 @@ async def check_trades(message: Message):
         await message.answer("WebSocket listener started.")
         await subscribe_trades(ws, message)
         await check_trades_logic(ws, message)
-        # await unsubscribe_trades(ws, message)
 
 
 @router.callback_query(lambda c: c.data == "stop_check")
 async def handle_stop(callback_query: types.CallbackQuery):
+    stop_event.set()  # Устанавливаем событие, чтобы остановить цикл
     await callback_query.message.edit_reply_markup()  # Убираем кнопки
-    await callback_query.answer("Останавливаю процесс.  ..")
+    await callback_query.answer("Останавливаю процесс...")
