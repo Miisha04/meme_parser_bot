@@ -9,11 +9,7 @@ main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [
             KeyboardButton(text='sol_cost'),
-            KeyboardButton(text="get_latest_coin")
-        ],
-        [
-            KeyboardButton(text="check_trades"),
-            KeyboardButton(text="/")
+            KeyboardButton(text="check_trades")
         ]
     ],
     resize_keyboard=True,

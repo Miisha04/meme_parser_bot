@@ -43,39 +43,6 @@ async def get_sol_price(message: Message):
         await message.answer("Failed to parse JSON data.")
 
 
-@router.message(F.text.lower() == 'get_latest_coin')
-async def get_latest_coin(message: Message):
-    url = "https://frontend-api.pump.fun/coins/latest"
-    text = get_data_from_pumpfun(url)
-
-    if text is None:
-        await message.answer("Failed to retrieve data from the API.")
-        return
-
-    try:
-        data = json.loads(text)
-        token = data.get('mint')
-        name = data.get('name')
-        twitter = data.get('twitter')
-        telegram = data.get('telegram')
-        website = data.get('website')
-        market_cap = data.get('market_cap')
-        img = data.get('image_uri')
-
-        await message.answer(
-            "Info about coin:\n\n"
-            f"Address: {token}\n"
-            f"Name: {name}\n"
-            f"Twitter: {twitter}\n"
-            f"Telegram: {telegram}\n"
-            f"Website: {website}\n"
-            f"MC: {market_cap} sol\n"
-            f"{img}\n"
-        )
-    except json.JSONDecodeError:
-        await message.answer("Failed to parse JSON data.")
-
-
 async def subscribe_trades(ws, message):
 
     payload = {
@@ -104,7 +71,7 @@ async def check_trades_logic(ws, message):
         callback_data="stop_check")
     )
     await message.reply(
-        "Push the button to stop checking",
+        "Нажми кнопку чтобы остановить возню",
         reply_markup=stop_button.as_markup()
     )
 
@@ -113,7 +80,7 @@ async def check_trades_logic(ws, message):
     while True:
         if stop_event.is_set():
             await unsubscribe_trades(ws, message)
-            await message.answer("Проверка остановлена")
+            await message.answer("возня кончилась")
             break
 
         try:
@@ -138,10 +105,13 @@ async def check_trades_logic(ws, message):
                         del_key = key
 
                         await message.answer(
-                            f"Solana value: {value}\n"
-                            f"Mint Address: <code>{key}</code>\n"
-                            f"MC: {token_data.get('usd_market_cap')} usd\n"
-                            f"Name_token: {token_data.get('name')}\n",
+                            f"Volume Surge: {round(value, 2)} SOL\n"
+                            f"\n"
+                            f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
+                            f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n"
+                            f"\n"
+                            f"CA: <code>{key}</code>\n"
+                            f"<a href='{token_data.get('image_uri')}'>IMG</a>",
                             parse_mode="HTML"
                         )
 
@@ -161,7 +131,7 @@ async def check_trades_logic(ws, message):
 async def check_trades(message: Message):
     url = "wss://rpc.api-pump.fun/ws"
     async with websockets.connect(url) as ws:
-        await message.answer("WebSocket listener started.")
+        await message.answer("пошла возня")
         await subscribe_trades(ws, message)
         await check_trades_logic(ws, message)
 
