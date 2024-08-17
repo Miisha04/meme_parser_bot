@@ -89,38 +89,45 @@ async def check_trades_logic(ws, message):
             mint_address = data.get('Mint')
             sol_amount = data.get('SolAmount') / 1000000000
 
-            if (sol_amount > 0.4) and (data.get('IsBuy')):
-                if mint_address in good_tokens:
-                    good_tokens[mint_address] += sol_amount
+            if sol_amount > 0.4:
+                if data.get('IsBuy'):
+                    if mint_address in good_tokens:
+                        good_tokens[mint_address] += sol_amount
+                    else:
+                        good_tokens[mint_address] = sol_amount
+
+                    del_key = ""
+
+                    for key, value in good_tokens.items():
+                        if value > 15:
+                            token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
+                            token_data = json.loads(token_text)
+
+                            del_key = key
+
+                            await message.answer(
+                                f"Volume Surge: {round(value, 2)} SOL\n"
+                                f"\n"
+                                f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
+                                f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n"
+                                f"\n"
+                                f"CA: <code>{key}</code>\n"
+                                f"<a href='{token_data.get('image_uri')}'>IMG</a>",
+                                parse_mode="HTML"
+                            )
+                        elif value < 0:
+                            del_key = key
+
+                        print(f"Key: {key}, Value: {value}")
+
+                    if del_key != "":
+                        del good_tokens[del_key]
+
+                    print("\n")
                 else:
-                    good_tokens[mint_address] = sol_amount
+                    if mint_address in good_tokens:
+                        good_tokens[mint_address] -= sol_amount
 
-                del_key = ""
-
-                for key, value in good_tokens.items():
-                    if value > 15:
-                        token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
-                        token_data = json.loads(token_text)
-
-                        del_key = key
-
-                        await message.answer(
-                            f"Volume Surge: {round(value, 2)} SOL\n"
-                            f"\n"
-                            f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
-                            f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n"
-                            f"\n"
-                            f"CA: <code>{key}</code>\n"
-                            f"<a href='{token_data.get('image_uri')}'>IMG</a>",
-                            parse_mode="HTML"
-                        )
-
-                    print(f"Key: {key}, Value: {value}")
-
-                if del_key != "":
-                    del good_tokens[del_key]
-
-                print("\n")
         except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK) as e:
             print(f"Connection closed: {e}. Reconnecting...")
             await asyncio.sleep(2)  # Подождите немного перед повторным подключением
