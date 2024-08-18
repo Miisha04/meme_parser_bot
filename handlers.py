@@ -64,6 +64,16 @@ async def unsubscribe_trades(ws, message):
 stop_event = asyncio.Event()
 
 
+async def decrement_values_periodically():
+    while True:
+        await asyncio.sleep(300)  # Ждем 5 минут
+
+        for key in good_tokens:
+            good_tokens[key] -= 0.5
+
+        print("Values decremented by 0.5")
+
+
 async def check_trades_logic(ws, message):
     stop_button = InlineKeyboardBuilder()
     stop_button.add(types.InlineKeyboardButton(
@@ -76,6 +86,8 @@ async def check_trades_logic(ws, message):
     )
 
     stop_event.clear()
+
+    asyncio.create_task(decrement_values_periodically())
 
     while True:
         if stop_event.is_set():
@@ -112,7 +124,10 @@ async def check_trades_logic(ws, message):
                                 f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n"
                                 f"\n"
                                 f"CA: <code>{key}</code>\n"
-                                f"<a href='{token_data.get('image_uri')}'>IMG</a>",
+                                f"TG: {token_data.get('telegram')}\n"
+                                f"Twitter: {token_data.get('twitter')}\n"
+                                f"Website: {token_data.get('website')}\n"
+                                f"<a href='{token_data.get('image_uri')}'></a>",
                                 parse_mode="HTML"
                             )
                         elif value < 0:
