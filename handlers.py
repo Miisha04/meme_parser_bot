@@ -118,16 +118,14 @@ async def check_trades_logic(ws, message):
                             del_key = key
 
                             await message.answer(
-                                f"Volume Surge: {round(value, 2)} SOL\n"
-                                f"\n"
+                                f"Volume Surge: {round(value, 2)} SOL\n\n"
                                 f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
-                                f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n"
-                                f"\n"
-                                f"CA: <code>{key}</code>\n"
+                                f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
+                                f"CA: <code>{key}</code>\n\n"
                                 f"TG: {token_data.get('telegram')}\n"
                                 f"Twitter: {token_data.get('twitter')}\n"
                                 f"Website: {token_data.get('website')}\n"
-                                f"<a href='{token_data.get('image_uri')}'></a>",
+                                f"<a href='{token_data.get('image_uri')}'>IMG</a>",
                                 parse_mode="HTML"
                             )
                         elif value < 0:
