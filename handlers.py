@@ -1,17 +1,15 @@
 import json
 import asyncio
 import websockets
-import time
+
 from aiogram import F, Router, types
-from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import Command, CommandStart
-from aiogram.utils.formatting import Text, Bold
 from aiogram.types import Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from keyboards import main_kb
 from parser import get_data_from_pumpfun
 
+from keyboards import main_kb
 router = Router()
 
 good_tokens = {}
@@ -110,18 +108,21 @@ async def check_trades_logic(ws, message):
                                 f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
                                 f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
                                 f"CA: <code>{key}</code>\n"
+                                f"TG: {token_data.get('telegram')}\n"
+                                f"Twitter: {token_data.get('twitter')}\n"
+                                f"Website: {token_data.get('website')}\n"
                                 f"<a href='{token_data.get('image_uri')}'>IMG</a>",
                                 parse_mode="HTML"
                             )
                         elif value < 0:
                             del_key = key
 
-                        print(f"Key: {key}, Value: {value}")
+                        #print(f"Key: {key}, Value: {value}")
 
                     if del_key != "":
                         del good_tokens[del_key]
 
-                    print("\n")
+                    #print("\n")
                 else:
                     if mint_address in good_tokens:
                         good_tokens[mint_address] -= sol_amount
@@ -132,7 +133,7 @@ async def check_trades_logic(ws, message):
             continue  # Попробуйте снова подключиться
 
 
-@router.message(F.text.lower() == 'check_trades')
+@router.message(Command("check_trades"))
 async def check_trades(message: Message):
     url = "wss://rpc.api-pump.fun/ws"
     async with websockets.connect(url) as ws:
