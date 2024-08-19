@@ -98,22 +98,31 @@ async def check_trades_logic(ws, message):
 
                     for key, value in good_tokens.items():
                         if value > 15:
+
                             token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
-                            token_data = json.loads(token_text)
 
-                            del_key = key
+                            if token_text is not None:
 
-                            await message.answer(
-                                f"Volume Surge: {round(value, 2)} SOL\n\n"
-                                f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
-                                f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
-                                f"CA: <code>{key}</code>\n"
-                                f"TG: {token_data.get('telegram')}\n"
-                                f"Twitter: {token_data.get('twitter')}\n"
-                                f"Website: {token_data.get('website')}\n"
-                                f"<a href='{token_data.get('image_uri')}'>IMG</a>",
-                                parse_mode="HTML"
-                            )
+                                token_data = json.loads(token_text)
+                                del_key = key
+
+                                await message.answer(
+                                    f"Volume Surge: {round(value, 2)} SOL\n\n"
+                                    f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
+                                    f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
+                                    f"CA: <code>{key}</code>\n"
+                                    f"TG: {token_data.get('telegram')}\n"
+                                    f"Twitter: {token_data.get('twitter')}\n"
+                                    f"Website: {token_data.get('website')}\n"
+                                    f"<a href='{token_data.get('image_uri')}'>IMG</a>",
+                                    parse_mode="HTML"
+                                )
+                            else:
+                                await message.answer(
+                                    f"Volume Surge: {round(value, 2)} SOL\n\n"
+                                    f"CA: <code>{key}</code>\n",
+                                    parse_mode="HTML"
+                                )
                         elif value < 0:
                             del_key = key
 
