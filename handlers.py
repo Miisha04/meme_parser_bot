@@ -161,7 +161,7 @@ async def check_trades_logic(ws, message):
 
         except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK) as e:
             print(f"Connection closed: {e}. Reconnecting...")
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
             continue
 
 
