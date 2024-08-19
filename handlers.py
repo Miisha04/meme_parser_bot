@@ -118,6 +118,8 @@ async def check_trades_logic(ws, message):
                                     parse_mode="HTML"
                                 )
                             else:
+
+                                del_key = key
                                 await message.answer(
                                     f"Volume Surge: {round(value, 2)} SOL\n\n"
                                     f"CA: <code>{key}</code>\n",
