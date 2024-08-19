@@ -11,10 +11,13 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from keyboards import main_kb
 from parser import get_data_from_pumpfun
+from config import bot
 
 router = Router()
 
 good_tokens = {}
+
+CHAT_IDD = 601718316
 
 
 @router.message(CommandStart())
@@ -111,7 +114,7 @@ async def check_trades_logic(ws, message):
                     del_key = ""
 
                     for key, value in good_tokens.items():
-                        if value > 15:
+                        if value > 20:
                             token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
                             token_data = json.loads(token_text)
 
@@ -121,22 +124,23 @@ async def check_trades_logic(ws, message):
                                 f"Volume Surge: {round(value, 2)} SOL\n\n"
                                 f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
                                 f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
-                                f"CA: <code>{key}</code>\n\n"
+                                f"CA: <code>{key}</code>\n"
+                                f"<a href='{token_data.get('image_uri')}'>IMG</a>"
                                 f"TG: {token_data.get('telegram')}\n"
                                 f"Twitter: {token_data.get('twitter')}\n"
-                                f"Website: {token_data.get('website')}\n"
-                                f"<a href='{token_data.get('image_uri')}'>IMG</a>",
+                                f"Website: {token_data.get('website')}\n",
                                 parse_mode="HTML"
                             )
+
                         elif value < 0:
                             del_key = key
 
-                        print(f"Key: {key}, Value: {value}")
+                        #print(f"Key: {key}, Value: {value}")
 
                     if del_key != "":
                         del good_tokens[del_key]
 
-                    print("\n")
+                    #print("\n")
                 else:
                     if mint_address in good_tokens:
                         good_tokens[mint_address] -= sol_amount
@@ -147,7 +151,7 @@ async def check_trades_logic(ws, message):
             continue  # Попробуйте снова подключиться
 
 
-@router.message(F.text.lower() == 'check_trades')
+@router.message(Command('check_trades'))
 async def check_trades(message: Message):
     url = "wss://rpc.api-pump.fun/ws"
     async with websockets.connect(url) as ws:
