@@ -102,15 +102,16 @@ async def check_trades_logic(ws, message):
                             token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
 
                             if token_text is not None:
-
                                 token_data = json.loads(token_text)
                                 del_key = key
+                                trade_link = f"https://t.me/achilles_trojanbot?start=r-bankx0-{key}"
 
                                 await message.answer(
                                     f"Volume Surge: {round(value, 2)} SOL\n\n"
                                     f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
                                     f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
-                                    f"CA: <code>{key}</code>\n"
+                                    f"CA: <code>{key}</code>\n\n"
+                                    f"Trade link: {trade_link}\n\n"
                                     f"TG: {token_data.get('telegram')}\n"
                                     f"Twitter: {token_data.get('twitter')}\n"
                                     f"Website: {token_data.get('website')}\n"
@@ -118,7 +119,6 @@ async def check_trades_logic(ws, message):
                                     parse_mode="HTML"
                                 )
                             else:
-
                                 del_key = key
                                 await message.answer(
                                     f"Volume Surge: {round(value, 2)} SOL\n\n"
@@ -128,20 +128,17 @@ async def check_trades_logic(ws, message):
                         elif value < 0:
                             del_key = key
 
-                        #print(f"Key: {key}, Value: {value}")
-
                     if del_key != "":
                         del good_tokens[del_key]
 
-                    #print("\n")
                 else:
                     if mint_address in good_tokens:
                         good_tokens[mint_address] -= sol_amount
 
         except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK) as e:
             print(f"Connection closed: {e}. Reconnecting...")
-            await asyncio.sleep(2)  # Подождите немного перед повторным подключением
-            continue  # Попробуйте снова подключиться
+            await asyncio.sleep(1)
+            continue
 
 
 @router.message(Command("check_trades"))
