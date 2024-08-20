@@ -1,6 +1,4 @@
 import requests
-import json
-from bs4 import BeautifulSoup
 
 from config import login, password, port
 
