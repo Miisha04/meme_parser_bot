@@ -1,21 +1,26 @@
 import json
 import asyncio
-import websockets
+import aiohttp
+import re
 
-from aiogram import F, Router, types
+from aiogram import Router, types
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from parser import get_data_from_pumpfun
-
 from keyboards import main_kb
+
 router = Router()
 
 good_tokens = {}
 bad_tokens = []
 stop_event = asyncio.Event()
-bad_token_event = asyncio.Event()
+
+# Данные для прокси
+PROXY_HOST = '45.159.180.71'
+PROXY_PORT = 3840
+LOGIN = 'user132834'
+PASSWORD = 'gyckq8'
 
 
 @router.message(CommandStart())
@@ -25,51 +30,70 @@ async def get_start(message: Message):
 
 @router.message(Command("help"))
 async def get_help(message: Message):
-    await message.answer("it`s help command")
-
-
-@router.message(F.text.lower() == 'sol_cost')
-async def get_sol_price(message: Message):
-    url = "https://frontend-api.pump.fun/sol-price"
-    text = get_data_from_pumpfun(url)
-
-    if text is None:
-        await message.answer("Failed to retrieve data from the API.")
-        return
-
-    try:
-        data = json.loads(text)
-        await message.answer(f"Current Solana cost: {data.get('solPrice')}")
-    except json.JSONDecodeError:
-        await message.answer("Failed to parse JSON data.")
+    await message.answer("it's help command")
 
 
 async def decrement_values_periodically():
     while True:
         await asyncio.sleep(300)  # Ждем 5 минут
 
-        for key in good_tokens:
-            good_tokens[key] -= 0.5
+        for key, token_info in list(good_tokens.items()):
+            token_info['volume'] -= 0.5
+            if token_info['volume'] <= 0:
+                del good_tokens[key]  # Удаляем токен, если его объем стал отрицательным
 
         print("Values decremented by 0.5")
 
 
-async def subscribe_trades(ws, message):
+def extract_first_word(message):
+    """Функция для извлечения первого слова в квадратных скобках"""
+    match = re.search(r'\["(\w+)"', message)  # Ищем первое слово внутри квадратных скобках
+    if match:
+        return match.group(1)
+    return None
 
-    payload = {
-        "method": "subscribeTrades"
-    }
-    await ws.send(json.dumps(payload))
-    print("Subscribed to trades")
+
+async def check_trades(message: Message):
+    url = "wss://frontend-api.pump.fun/socket.io/?EIO=4&transport=websocket"
+    proxy_auth = aiohttp.BasicAuth(LOGIN, PASSWORD)
+    proxy_url = f"http://{PROXY_HOST}:{PROXY_PORT}"
+
+    while True:  # Добавляем бесконечный цикл для перезагрузки WebSocket при ошибке
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.ws_connect(url, proxy=proxy_url, proxy_auth=proxy_auth) as ws:
+                    await ws.send_str("40")  # Отправляем сообщение "40"
+                    print("Сообщение '40' отправлено")
+                    await message.answer("пошла возня")
+
+                    # Запускаем задачу для отправки сообщения '3' каждые 10 секунд
+                    asyncio.create_task(send_heartbeat(ws))
+
+                    await check_trades_logic(ws, message)
+            except Exception as e:
+                await message.answer(f"Ошибка подключения: {e}")
+                print("Переподключение через 5 секунд...")
+                await asyncio.sleep(5)  # Даем время перед повторной попыткой
 
 
-async def unsubscribe_trades(ws, message):
-
-    payload = {
-        "method": "unsubscribeTrades"
-    }
-    await ws.send(json.dumps(payload))
-    print("Unsubscribed from trades")
+async def send_heartbeat(ws):
+    """Функция для отправки сообщения '3' каждые 10 секунд."""
+    while True:
+        await asyncio.sleep(10)  # Ждем 10 секунд
+        
+        try:
+            if not ws.closed:  # Проверяем, что соединение не закрыто
+                await ws.send_str("3")
+                print("Отправлено сообщение '3'")
+            else:
+                print("Соединение закрыто, не могу отправить сообщение")
+                break  # Прерываем цикл, если соединение закрыто
+        except aiohttp.ClientConnectionError as e:
+            print(f"Ошибка соединения: {e}")
+            break  # Прерываем цикл в случае ошибки соединения
+        except Exception as e:
+            print(f"Неизвестная ошибка: {e}")
+            break  # Прерываем цикл в случае любой другой ошибки
 
 
 async def check_trades_logic(ws, message):
@@ -78,100 +102,105 @@ async def check_trades_logic(ws, message):
         text="Stop",
         callback_data="stop_check")
     )
-    await message.reply(
-        "Нажми кнопку чтобы остановить возню",
-        reply_markup=stop_button.as_markup()
-    )
+    
+    if not stop_event.is_set():
+        await message.reply(
+            "Нажми кнопку чтобы остановить возню",
+            reply_markup=stop_button.as_markup()
+        )
 
     stop_event.clear()
-    bad_token_event.clear()
+
     asyncio.create_task(decrement_values_periodically())
 
     while True:
         if stop_event.is_set():
-            await unsubscribe_trades(ws, message)
             await message.answer("возня кончилась")
-            break
+            return  # Завершение функции
 
         try:
-            trade = await ws.recv()
-            data = json.loads(trade)
-            mint_address = data.get('Mint')
-            sol_amount = data.get('SolAmount') / 1000000000
+            result = await ws.receive()
 
-            if mint_address not in bad_tokens:
-                if sol_amount > 0.4:
-                    if data.get('IsBuy'):
-                        if mint_address in good_tokens:
-                            good_tokens[mint_address] += sol_amount
-                        else:
-                            good_tokens[mint_address] = sol_amount
+            if isinstance(result, aiohttp.WSMessage):
+                if result.type == aiohttp.WSMsgType.TEXT:
+                    result_str = result.data
+                else:
+                    print(f"Неожиданный тип сообщения: {result.type}")
+                    raise TypeError(f"Неподдерживаемый тип данных: {result.type}")
+            else:
+                print(f"Получено сообщение не в формате строки: {result}")
+                raise TypeError("Неподдерживаемый формат данных")
 
-                        del_key = ""
+            first_word = extract_first_word(result_str)
+            if first_word == "tradeCreated":
+                match = re.search(r'42\["tradeCreated",({.*})\]', result_str)
+                if match:
+                    json_data = match.group(1)
+                    try:
+                        data = json.loads(json_data)
+                        is_buy = data.get('is_buy')
+                        sol_amount = data.get('sol_amount') / 1000000000
+                        mint_address = data.get('mint')
 
-                        for key, value in good_tokens.items():
-                            if value > 20:
-                                token_text = get_data_from_pumpfun(f"https://frontend-api.pump.fun/coins/{key}")
+                        if mint_address not in bad_tokens:
+                            if sol_amount > 0.4:
+                                if is_buy:
+                                    if mint_address in good_tokens:
+                                        good_tokens[mint_address]['volume'] += sol_amount
+                                    else:
+                                        good_tokens[mint_address] = {'volume': sol_amount, 'hits': 0}
 
-                                if token_text is not None:
-                                    token_data = json.loads(token_text)
-                                    del_key = key
-                                    trade_link = f"https://t.me/achilles_trojanbot?start=r-bankx0-{key}"
+                                    if good_tokens[mint_address]['volume'] > 15:
+                                        good_tokens[mint_address]['hits'] += 1
 
-                                    await message.answer(
-                                        f"Volume Surge: {round(value, 2)} SOL\n\n"
-                                        f"Token name: {token_data.get('name')} (${token_data.get('symbol')})\n"
-                                        f"Market Cap: ${round(token_data.get('usd_market_cap'), 0)}\n\n"
-                                        f"CA: <code>{key}</code>\n\n"
-                                        f"TG: {token_data.get('telegram')}\n"
-                                        f"Twitter: {token_data.get('twitter')}\n"
-                                        f"Website: {token_data.get('website')}\n\n"
-                                        f"Trade link: {trade_link}\n"
-                                        f"<a href='{token_data.get('image_uri')}'>IMG</a>",
-                                        parse_mode="HTML"
-                                    )
+                                        twitter = data.get('twitter')
+                                        telegram = data.get('telegram')
+                                        creator = data.get('creator')
+                                        token_description = data.get('description')
+                                        token_name = data.get('name')
+                                        token_symbol = data.get('symbol')
+                                        market_cap_usdt = round(data.get('usd_market_cap', 0), 2)
+                                        trade_link = f"https://gmgn.ai/sol/token/{mint_address}"
 
-                                    # Создаем кнопку для пометки токена как "плохого"
-                                    bad_token_button = InlineKeyboardBuilder()
-                                    bad_token_button.add(types.InlineKeyboardButton(
-                                        text="Fuck this",
-                                        callback_data=f"bad_token_{key}")
-                                    )
-                                    await message.answer(
-                                        "Нажми кнопку чтобы ебать токен",
-                                        reply_markup=bad_token_button.as_markup()
-                                    )
+                                        # Добавляем кнопку "fuck this" для каждого токена
+                                        token_buttons = InlineKeyboardBuilder()
+                                        token_buttons.add(types.InlineKeyboardButton(
+                                            text="fuck this",
+                                            callback_data=f"bad_token_{mint_address}")
+                                        )
 
+                                        await message.answer(
+                                            f"HITS AMOUNT: (<strong>{good_tokens[mint_address]['hits']}</strong>)\n\n"
+                                            f"Token Name: {token_name} ({token_symbol})\n"
+                                            f"Description: {token_description}\n"
+                                            f"Creator: <code>{creator}</code>\n\n"
+                                            f"Market Cap: <strong>{market_cap_usdt}$</strong>\n\n"
+                                            f"Twitter: {twitter}\n"
+                                            f"Telegram: {telegram}\n\n"
+                                            f"Mint Address: <code>{mint_address}</code>\n\n"
+                                            f"Trade link: {trade_link}\n",
+                                            parse_mode="HTML",
+                                            reply_markup=token_buttons.as_markup()
+                                        )
+
+                                        good_tokens[mint_address]['volume'] = 0
                                 else:
-                                    del_key = key
-                                    await message.answer(
-                                        f"Volume Surge: {round(value, 2)} SOL\n\n"
-                                        f"CA: <code>{key}</code>\n",
-                                        parse_mode="HTML"
-                                    )
-                            elif value < 0:
-                                del_key = key
+                                    if mint_address in good_tokens:
+                                        good_tokens[mint_address]['volume'] -= sol_amount
+                                        if good_tokens[mint_address]['volume'] <= 0: 
+                                            del good_tokens[mint_address]
 
-                        if del_key != "":
-                            del good_tokens[del_key]
+                    except json.JSONDecodeError:
+                        print(f"Ошибка декодирования JSON: {json_data}")
 
-                    else:
-                        if mint_address in good_tokens:
-                            good_tokens[mint_address] -= sol_amount
-
-        except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK) as e:
-            print(f"Connection closed: {e}. Reconnecting...")
-            await asyncio.sleep(5)
-            continue
+        except Exception as e:
+            print(f"Ошибка: {e}")
+            break
 
 
 @router.message(Command("check_trades"))
-async def check_trades(message: Message):
-    url = "wss://rpc.api-pump.fun/ws"
-    async with websockets.connect(url) as ws:
-        await message.answer("пошла возня")
-        await subscribe_trades(ws, message)
-        await check_trades_logic(ws, message)
+async def check_trades_command(message: Message):
+    await check_trades(message)
 
 
 @router.callback_query(lambda c: c.data == "stop_check")
@@ -191,5 +220,8 @@ async def handle_bad_token(callback_query: types.CallbackQuery):
 
         for token in bad_tokens:
             print(token)
+        
+        # print("\n\n")
+        # print(good_tokens)
 
-        print("\n")
+        # print("\n")
