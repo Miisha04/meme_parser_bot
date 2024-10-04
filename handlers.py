@@ -17,10 +17,10 @@ bad_tokens = []
 stop_event = asyncio.Event()
 
 # Данные для прокси
-PROXY_HOST = '45.159.180.71'
+PROXY_HOST = "45.159.180.71"
 PROXY_PORT = 3840
-LOGIN = 'user132834'
-PASSWORD = 'gyckq8'
+LOGIN = "user132834"
+PASSWORD = "gyckq8"
 
 
 @router.message(CommandStart())
@@ -38,8 +38,8 @@ async def decrement_values_periodically():
         await asyncio.sleep(300)  # Ждем 5 минут
 
         for key, token_info in list(good_tokens.items()):
-            token_info['volume'] -= 0.5
-            if token_info['volume'] <= 0:
+            token_info["volume"] -= 0.5
+            if token_info["volume"] <= 0:
                 del good_tokens[key]  # Удаляем токен, если его объем стал отрицательным
 
         print("Values decremented by 0.5")
@@ -47,7 +47,9 @@ async def decrement_values_periodically():
 
 def extract_first_word(message):
     """Функция для извлечения первого слова в квадратных скобках"""
-    match = re.search(r'\["(\w+)"', message)  # Ищем первое слово внутри квадратных скобках
+    match = re.search(
+        r'\["(\w+)"', message
+    )  # Ищем первое слово внутри квадратных скобках
     if match:
         return match.group(1)
     return None
@@ -61,7 +63,9 @@ async def check_trades(message: Message):
     while True:  # Добавляем бесконечный цикл для перезагрузки WebSocket при ошибке
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.ws_connect(url, proxy=proxy_url, proxy_auth=proxy_auth) as ws:
+                async with session.ws_connect(
+                    url, proxy=proxy_url, proxy_auth=proxy_auth
+                ) as ws:
                     await ws.send_str("40")  # Отправляем сообщение "40"
                     print("Сообщение '40' отправлено")
                     await message.answer("пошла возня")
@@ -80,7 +84,7 @@ async def send_heartbeat(ws):
     """Функция для отправки сообщения '3' каждые 10 секунд."""
     while True:
         await asyncio.sleep(10)  # Ждем 10 секунд
-        
+
         try:
             if not ws.closed:  # Проверяем, что соединение не закрыто
                 await ws.send_str("3")
@@ -98,15 +102,11 @@ async def send_heartbeat(ws):
 
 async def check_trades_logic(ws, message):
     stop_button = InlineKeyboardBuilder()
-    stop_button.add(types.InlineKeyboardButton(
-        text="Stop",
-        callback_data="stop_check")
-    )
-    
+    stop_button.add(types.InlineKeyboardButton(text="Stop", callback_data="stop_check"))
+
     if not stop_event.is_set():
         await message.reply(
-            "Нажми кнопку чтобы остановить возню",
-            reply_markup=stop_button.as_markup()
+            "Нажми кнопку чтобы остановить возню", reply_markup=stop_button.as_markup()
         )
 
     stop_event.clear()
@@ -138,56 +138,80 @@ async def check_trades_logic(ws, message):
                     json_data = match.group(1)
                     try:
                         data = json.loads(json_data)
-                        is_buy = data.get('is_buy')
-                        sol_amount = data.get('sol_amount') / 1000000000
-                        mint_address = data.get('mint')
+                        is_buy = data.get("is_buy")
+                        sol_amount = data.get("sol_amount") / 1000000000
+                        mint_address = data.get("mint")
 
                         if mint_address not in bad_tokens:
-                            if sol_amount > 0.4:
+                            print(good_tokens, end="\n")
+                            print("\n")
+
+                            if sol_amount > 0.2:
                                 if is_buy:
                                     if mint_address in good_tokens:
-                                        good_tokens[mint_address]['volume'] += sol_amount
+                                        good_tokens[mint_address]["txs"] += 1
+                                        good_tokens[mint_address][
+                                            "volume"
+                                        ] += sol_amount
                                     else:
-                                        good_tokens[mint_address] = {'volume': sol_amount, 'hits': 0}
+                                        good_tokens[mint_address] = {
+                                            "volume": sol_amount,
+                                            "hits": 0,
+                                            "txs": 0,
+                                        }
 
-                                    if good_tokens[mint_address]['volume'] > 15:
-                                        good_tokens[mint_address]['hits'] += 1
+                                    if good_tokens[mint_address]["volume"] > 15:
+                                        good_tokens[mint_address]["hits"] += 1
 
-                                        twitter = data.get('twitter')
-                                        telegram = data.get('telegram')
-                                        creator = data.get('creator')
-                                        token_description = data.get('description')
-                                        token_name = data.get('name')
-                                        token_symbol = data.get('symbol')
-                                        market_cap_usdt = round(data.get('usd_market_cap', 0), 2)
-                                        trade_link = f"https://gmgn.ai/sol/token/{mint_address}"
+                                        twitter = data.get("twitter")
+                                        telegram = data.get("telegram")
+                                        creator = data.get("creator")
+                                        token_description = data.get("description")
+                                        token_name = data.get("name")
+                                        token_symbol = data.get("symbol")
+                                        market_cap_usdt = round(
+                                            data.get("usd_market_cap", 0)
+                                        )
+                                        trade_link = (
+                                            f"https://gmgn.ai/sol/token/{mint_address}"
+                                        )
+                                        website = data.get("website")
+                                        img = data.get("image_uri")
+                                        sol_surge = round(
+                                            good_tokens[mint_address]["volume"], 2
+                                        )
 
                                         # Добавляем кнопку "fuck this" для каждого токена
                                         token_buttons = InlineKeyboardBuilder()
-                                        token_buttons.add(types.InlineKeyboardButton(
-                                            text="fuck this",
-                                            callback_data=f"bad_token_{mint_address}")
+                                        token_buttons.add(
+                                            types.InlineKeyboardButton(
+                                                text="fuck this",
+                                                callback_data=f"bad_token_{mint_address}",
+                                            )
                                         )
 
-                                        await message.answer(
-                                            f"HITS AMOUNT: (<strong>{good_tokens[mint_address]['hits']}</strong>)\n\n"
-                                            f"Token Name: {token_name} ({token_symbol})\n"
-                                            f"Description: {token_description}\n"
-                                            f"Creator: <code>{creator}</code>\n\n"
-                                            f"Market Cap: <strong>{market_cap_usdt}$</strong>\n\n"
-                                            f"Twitter: {twitter}\n"
-                                            f"Telegram: {telegram}\n\n"
-                                            f"Mint Address: <code>{mint_address}</code>\n\n"
-                                            f"Trade link: {trade_link}\n",
-                                            parse_mode="HTML",
-                                            reply_markup=token_buttons.as_markup()
+                                        await message.answer_photo(
+                                            photo=img,  # URL картинки
+                                            caption=(
+                                                f"<strong>Name</strong>: {token_name} — <a href='https://x.com/search?q=%24{token_symbol}&src=typed_query'><strong>${token_symbol}</strong></a> | (<strong>{good_tokens[mint_address]['hits']}</strong>)\n"
+                                                f"<strong>Volume surge</strong>: {sol_surge} SOL under 5 mins\n\n"  # кол-во минут зависит от периода во сколько раз отнимается 0.5
+                                                f"<strong>Market Cap</strong>: ${market_cap_usdt}\n"
+                                                f"<strong>CA</strong>: <code>{mint_address}</code>\n\n"
+                                                f"<a href='{twitter}'>Twitter</a> | <a href='{telegram}'>Telegram</a> | <a href='{website}'>Website</a> | <a href='https://solscan.io/account/{creator}'>Creator (solscan)</a> | <a href='https://pump.fun/profile/{creator}'>Creator PF</a>\n\n"
+                                                f"<strong>Description</strong>: {token_description}\n\n"
+                                                f"<a href='https://t.me/achilles_trojanbot?start=r-bankx0-{mint_address}'>Trojan</a> | <a href='{trade_link}'>GmGn</a> | <a href='https://photon-sol.tinyastro.io/en/lp/{mint_address}'>Photon</a> | <a href='https://bullx.io/terminal?chainId=1399811149&address={mint_address}'>BullX</a>"
+                                            ),
+                                            parse_mode="HTML",  # Указываем HTML форматирование для текста
+                                            reply_markup=token_buttons.as_markup(),  # Кнопки
                                         )
 
-                                        good_tokens[mint_address]['volume'] = 0
+                                        good_tokens[mint_address]["volume"] = 0
                                 else:
                                     if mint_address in good_tokens:
-                                        good_tokens[mint_address]['volume'] -= sol_amount
-                                        if good_tokens[mint_address]['volume'] <= 0: 
+                                        good_tokens[mint_address][
+                                            "volume"
+                                        ] -= sol_amount
+                                        if good_tokens[mint_address]["volume"] <= 0:
                                             del good_tokens[mint_address]
 
                     except json.JSONDecodeError:
@@ -220,7 +244,7 @@ async def handle_bad_token(callback_query: types.CallbackQuery):
 
         for token in bad_tokens:
             print(token)
-        
+
         # print("\n\n")
         # print(good_tokens)
 
