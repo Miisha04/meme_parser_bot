@@ -60,25 +60,32 @@ async def check_trades(message: Message):
     proxy_auth = aiohttp.BasicAuth(LOGIN, PASSWORD)
     proxy_url = f"http://{PROXY_HOST}:{PROXY_PORT}"
 
-    while True:  # Добавляем бесконечный цикл для перезагрузки WebSocket при ошибке
+    while True:
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.ws_connect(
-                    url, proxy=proxy_url, proxy_auth=proxy_auth
-                ) as ws:
+                async with session.ws_connect(url, proxy=proxy_url, proxy_auth=proxy_auth) as ws:
                     await ws.send_str("40")  # Отправляем сообщение "40"
                     print("Сообщение '40' отправлено")
                     await message.answer("пошла возня")
 
-                    # Запускаем задачу для отправки сообщения '3' каждые 10 секунд
-                    asyncio.create_task(send_heartbeat(ws))
+                    # Запускаем задачи для отправки сообщения '3' и декрементации
+                    heartbeat_task = asyncio.create_task(send_heartbeat(ws))
+                    decrement_task = asyncio.create_task(decrement_values_periodically())
 
                     await check_trades_logic(ws, message)
-            except Exception as e:
+
+                    # Завершаем фоновые задачи, если основная задача завершилась
+                    heartbeat_task.cancel()
+                    decrement_task.cancel()
+
+            except aiohttp.ClientConnectionError as e:
                 await message.answer(f"Ошибка подключения: {e}")
                 print("Переподключение через 5 секунд...")
-                await asyncio.sleep(5)  # Даем время перед повторной попыткой
+                await asyncio.sleep(5)  # Ждем перед переподключением
 
+            except Exception as e:
+                await message.answer(f"Неизвестная ошибка: {e}")
+                break  
 
 async def send_heartbeat(ws):
     """Функция для отправки сообщения '3' каждые 10 секунд."""
@@ -149,15 +156,14 @@ async def check_trades_logic(ws, message):
                             if sol_amount > 0.2:
                                 if is_buy:
                                     if mint_address in good_tokens:
-                                        good_tokens[mint_address]["txs"] += 1
-                                        good_tokens[mint_address][
-                                            "volume"
-                                        ] += sol_amount
+                                        good_tokens[mint_address]["txs_buy"] += 1
+                                        good_tokens[mint_address]["volume"] += sol_amount
                                     else:
                                         good_tokens[mint_address] = {
                                             "volume": sol_amount,
                                             "hits": 0,
-                                            "txs": 0,
+                                            "txs_buy": 1,
+                                            "txs_sell": 0,
                                         }
 
                                     if good_tokens[mint_address]["volume"] > 15:
@@ -208,9 +214,8 @@ async def check_trades_logic(ws, message):
                                         good_tokens[mint_address]["volume"] = 0
                                 else:
                                     if mint_address in good_tokens:
-                                        good_tokens[mint_address][
-                                            "volume"
-                                        ] -= sol_amount
+                                        good_tokens[mint_address]["volume"] -= sol_amount
+                                        good_tokens[mint_address]["txs_sell"] += 1
                                         if good_tokens[mint_address]["volume"] <= 0:
                                             del good_tokens[mint_address]
 
