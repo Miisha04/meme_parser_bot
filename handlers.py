@@ -2,6 +2,7 @@ import json
 import asyncio
 import aiohttp
 import re
+from math import floor
 
 from aiogram import Router, types
 from aiogram.filters import Command, CommandStart
@@ -40,9 +41,6 @@ async def decrement_values_periodically():
 
         for key, token_info in list(good_tokens.items()):
             token_info["volume"] -= 0.5
-            if token_info["volume"] <= 0:
-                del good_tokens[key]  # Удаляем токен, если его объем стал отрицательным
-
         print("Values decremented by 0.5")
 
 
@@ -165,7 +163,10 @@ async def check_trades_logic(ws, message):
                                             "txs_sell": 0,
                                         }
 
-                                    if good_tokens[mint_address]["volume"] > 15:
+                                        print("first  - ",floor(good_tokens[mint_address]["volume"] // 5))
+                                        print("second  - ",good_tokens[mint_address]["hits"]+1)
+
+                                    if floor(good_tokens[mint_address]["volume"] // 5) >= (good_tokens[mint_address]["hits"]+1):
                                         good_tokens[mint_address]["hits"] += 1
 
                                         twitter = data.get("twitter")
@@ -195,22 +196,40 @@ async def check_trades_logic(ws, message):
                                             )
                                         )
 
-                                        await message.answer_photo(
-                                            photo=img,  # URL картинки
-                                            caption=(
-                                                f"<strong>Name</strong>: {token_name} — <a href='https://x.com/search?q=%24{token_symbol}&src=typed_query'><strong>${token_symbol}</strong></a> | (<strong>{good_tokens[mint_address]['hits']}</strong>)\n"
-                                                f"<strong>Volume surge</strong>: {sol_surge} SOL under 5 mins\n\n"  # кол-во минут зависит от периода во сколько раз отнимается 0.5
-                                                f"<strong>Market Cap</strong>: ${market_cap_usdt}\n"
-                                                f"<strong>CA</strong>: <code>{mint_address}</code>\n\n"
-                                                f"<a href='{twitter}'>Twitter</a> | <a href='{telegram}'>Telegram</a> | <a href='{website}'>Website</a> | <a href='https://solscan.io/account/{creator}'>Creator (solscan)</a> | <a href='https://pump.fun/profile/{creator}'>Creator PF</a>\n\n"
-                                                f"<strong>Description</strong>: {token_description}\n\n"
-                                                f"<a href='https://t.me/achilles_trojanbot?start=r-bankx0-{mint_address}'>Trojan</a> | <a href='{trade_link}'>GmGn</a> | <a href='https://photon-sol.tinyastro.io/en/lp/{mint_address}'>Photon</a> | <a href='https://bullx.io/terminal?chainId=1399811149&address={mint_address}'>BullX</a>"
-                                            ),
-                                            parse_mode="HTML",  # Указываем HTML форматирование для текста
-                                            reply_markup=token_buttons.as_markup(),  # Кнопки
-                                        )
+                                        try:
+                                            await message.answer_photo(
+                                                photo=img,  # URL картинки
+                                                caption=(
+                                                    f"<strong>Name</strong>: {token_name} — <a href='https://x.com/search?q=%24{token_symbol}&src=typed_query&f=live'><strong>${token_symbol}</strong></a> | (<strong>{good_tokens[mint_address]['hits']}</strong>)\n"
+                                                    f"<strong>Volume surge</strong>: {sol_surge} SOL ({good_tokens[mint_address]['txs_buy']}/{good_tokens[mint_address]['txs_sell']}) under 5 mins\n\n"
+                                                    f"<strong>Market Cap</strong>: ${market_cap_usdt}\n"
+                                                    f"<strong>CA</strong>: <code>{mint_address}</code>\n\n"
+                                                    f"<a href='{twitter}'>Twitter</a> | <a href='{telegram}'>Telegram</a> | <a href='{website}'>Website</a> | <a href='https://solscan.io/account/{creator}'>Creator (solscan)</a> | <a href='https://pump.fun/profile/{creator}'>Creator PF</a>\n\n"
+                                                    f"<strong>Description</strong>: {token_description}\n\n"
+                                                    f"<a href='https://t.me/achilles_trojanbot?start=r-bankx0-{mint_address}'>Trojan</a> | <a href='{trade_link}'>GmGn</a> | <a href='https://photon-sol.tinyastro.io/en/lp/{mint_address}'>Photon</a> | <a href='https://bullx.io/terminal?chainId=1399811149&address={mint_address}'>BullX</a>"
+                                                ),
+                                                parse_mode="HTML",  # Указываем HTML форматирование для текста
+                                                reply_markup=token_buttons.as_markup(),  # Кнопки
+                                            )
+                                        except Exception as e:
+                                            # Логируем ошибку для отладки
+                                            print(f"Ошибка отправки фото для токена {mint_address}: {e}")
+                                            
+                                            # Отправляем сообщение без изображения
+                                            await message.answer(
+                                                text=(
+                                                    f"<strong>Name</strong>: {token_name} — <a href='https://x.com/search?q=%24{token_symbol}&src=typed_query&f=live'><strong>${token_symbol}</strong></a> | (<strong>{good_tokens[mint_address]['hits']}</strong>)\n"
+                                                    f"<strong>Volume surge</strong>: {sol_surge} SOL ({good_tokens[mint_address]['txs_buy']}/{good_tokens[mint_address]['txs_sell']}) under 5 mins\n\n"
+                                                    f"<strong>Market Cap</strong>: ${market_cap_usdt}\n"
+                                                    f"<strong>CA</strong>: <code>{mint_address}</code>\n\n"
+                                                    f"<a href='{twitter}'>Twitter</a> | <a href='{telegram}'>Telegram</a> | <a href='{website}'>Website</a> | <a href='https://solscan.io/account/{creator}'>Creator (solscan)</a> | <a href='https://pump.fun/profile/{creator}'>Creator PF</a>\n\n"
+                                                    f"<strong>Description</strong>: {token_description}\n\n"
+                                                    f"<a href='https://t.me/achilles_trojanbot?start=r-bankx0-{mint_address}'>Trojan</a> | <a href='{trade_link}'>GmGn</a> | <a href='https://photon-sol.tinyastro.io/en/lp/{mint_address}'>Photon</a> | <a href='https://bullx.io/terminal?chainId=1399811149&address={mint_address}'>BullX</a>"
+                                                ),
+                                                parse_mode="HTML",  # Указываем HTML форматирование
+                                                reply_markup=token_buttons.as_markup(),  # Добавляем кнопки
+                                            )
 
-                                        good_tokens[mint_address]["volume"] = 0
                                 else:
                                     if mint_address in good_tokens:
                                         good_tokens[mint_address]["volume"] -= sol_amount
@@ -220,6 +239,7 @@ async def check_trades_logic(ws, message):
 
                                 sorted_tokens = dict(sorted(good_tokens.items(), key=lambda item: item[1]['volume'], reverse=True))
                                 print(sorted_tokens, end='\n\n\n')
+                                
 
                     except json.JSONDecodeError:
                         print(f"Ошибка декодирования JSON: {json_data}")
