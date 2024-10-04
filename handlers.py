@@ -15,6 +15,7 @@ router = Router()
 good_tokens = {}
 bad_tokens = []
 stop_event = asyncio.Event()
+sorted_tokens = {}
 
 # Данные для прокси
 PROXY_HOST = "45.159.180.71"
@@ -150,8 +151,6 @@ async def check_trades_logic(ws, message):
                         mint_address = data.get("mint")
 
                         if mint_address not in bad_tokens:
-                            print(good_tokens, end="\n")
-                            print("\n")
 
                             if sol_amount > 0.2:
                                 if is_buy:
@@ -218,6 +217,9 @@ async def check_trades_logic(ws, message):
                                         good_tokens[mint_address]["txs_sell"] += 1
                                         if good_tokens[mint_address]["volume"] <= 0:
                                             del good_tokens[mint_address]
+
+                                sorted_tokens = dict(sorted(good_tokens.items(), key=lambda item: item[1]['volume'], reverse=True))
+                                print(sorted_tokens, end='\n\n\n')
 
                     except json.JSONDecodeError:
                         print(f"Ошибка декодирования JSON: {json_data}")
