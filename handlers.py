@@ -114,8 +114,8 @@ async def process_trade(data, message):
                     del good_tokens[mint_address]
 
     global sorted_tokens
-    sorted_tokens = dict(sorted(good_tokens.items(), key=lambda item: item[1]["volume"], reverse=True))
-    print(sorted_tokens)
+    #sorted_tokens = dict(sorted(good_tokens.items(), key=lambda item: item[1]["volume"], reverse=True))
+    #print(sorted_tokens)
 
 
 async def send_token_alert(mint_address, token_info, data, message):
