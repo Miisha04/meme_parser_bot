@@ -1,0 +1,11 @@
+aiogram
+aiohttp
+aiohttp-socks
+requests
+
+
+
+
+
+
+
